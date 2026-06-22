@@ -1,122 +1,72 @@
-const http = require('http');
-const url = require('url');
+const express = require('express');
+const axios = require('axios');
 
-// 代理配置
-const PROXY_PORT = 11435;                // 代理监听端口
-const TARGET_HOST = '127.0.0.1';         // Ollama 服务地址
-const TARGET_PORT = 11434;               // Ollama 服务端口
+const app = express();
+const PORT = 11435; // 代理服务器监听端口
+const TARGET_BASE_URL = 'http://127.0.0.1:11434'; // Ollama 本地地址
 
-// 创建 HTTP 服务器
-const server = http.createServer((req, res) => {
-    // 只处理 POST 请求（因为只有 POST 才有请求体）
-    if (req.method !== 'POST') {
-        // 对于非 POST 请求，直接转发（不做修改）
-        const targetUrl = url.parse(req.url);
-        const options = {
-            hostname: TARGET_HOST,
-            port: TARGET_PORT,
-            path: targetUrl.path,
-            method: req.method,
-            headers: req.headers,
-        };
-        delete options.headers.host; // 避免 Host 冲突
-        const proxyReq = http.request(options, (proxyRes) => {
-            res.writeHead(proxyRes.statusCode, proxyRes.headers);
-            proxyRes.pipe(res);
-        });
-        proxyReq.on('error', (err) => {
-            console.error('代理错误:', err.message);
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Proxy Error: ' + err.message);
-        });
-        req.pipe(proxyReq);
-        return;
+// 解析 JSON 请求体，限制大小设置为 50MB 以防止长上下文请求被拦截
+app.use(express.json({ limit: '50mb' }));
+
+// 拦截所有请求
+app.use(async (req, res) => {
+    // 1. 复制原始请求体
+    let modifiedBody = { ...req.body };
+
+    // 2. 强制添加/覆盖指定字段
+    // 注意：仅当请求体存在且为对象时进行修改（通常是 POST 请求）
+    if (req.method === 'POST' || req.method === 'PUT') {
+        modifiedBody.stream = false;
+        modifiedBody.enable_thinking = false;
     }
 
-    // 收集请求体数据
-    let body = [];
-    req.on('data', chunk => body.push(chunk));
-    req.on('end', () => {
-        const rawBody = Buffer.concat(body).toString();
+    // 3. 构建完整的 Ollama 目标 URL (保留原始路径，如 /v1/chat/completions)
+    const targetUrl = `${TARGET_BASE_URL}${req.originalUrl}`;
 
-        // 尝试解析 JSON 请求体
-        let jsonBody;
-        try {
-            jsonBody = JSON.parse(rawBody);
-        } catch (e) {
-            // 如果不是 JSON，直接原样转发（不添加 stream 参数）
-            console.warn('请求体不是 JSON，原样转发');
-            forwardRequest(req, res, rawBody);
-            return;
-        }
+    // 4. 准备转发请求的 Headers
+    const forwardHeaders = { ...req.headers };
+    // 删除 hop-by-hop 头部和 host，让 axios 重新生成
+    delete forwardHeaders['host'];
+    delete forwardHeaders['content-length']; 
+    delete forwardHeaders['connection'];
 
-        // 强制设置 stream: false（覆盖任何已有值）
-        jsonBody.stream = false;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} -> ${targetUrl}`);
+    console.log('Modified Body:', JSON.stringify(modifiedBody, null, 2));
 
-        // 重新序列化为 JSON 字符串
-        const newBody = JSON.stringify(jsonBody);
-        console.log(`[${new Date().toISOString()}] 添加 stream=false: ${req.url}`);
+    try {
+        // 5. 发送请求到 Ollama
+        const response = await axios({
+            method: req.method,
+            url: targetUrl,
+            data: modifiedBody,
+            headers: forwardHeaders,
+            responseType: 'stream', // 使用 stream 接收，以便完美透传响应数据
+            validateStatus: () => true // 允许所有 HTTP 状态码，以便将 Ollama 的错误原样透传给客户端
+        });
 
-        // 转发修改后的请求
-        forwardRequest(req, res, newBody);
-    });
+        // 6. 处理响应头，过滤掉可能导致乱码或冲突的头部
+        const responseHeaders = { ...response.headers };
+        delete responseHeaders['transfer-encoding'];
+        delete responseHeaders['content-length']; // 让 express 重新计算
+        delete responseHeaders['content-encoding']; // axios 默认会解压 gzip，需移除该头防止客户端解析乱码
+        
+        res.set(responseHeaders);
 
-    req.on('error', (err) => {
-        console.error('读取请求体错误:', err.message);
-        res.writeHead(400);
-        res.end('Bad Request');
-    });
+        // 7. 将 Ollama 的响应状态码和数据流透传给原始客户端
+        res.status(response.status);
+        response.data.pipe(res);
+
+    } catch (error) {
+        console.error('Proxy Error:', error.message);
+        res.status(500).json({ 
+            error: 'Proxy server internal error', 
+            details: error.message 
+        });
+    }
 });
 
-// 转发请求函数
-function forwardRequest(req, res, bodyString) {
-    const targetUrl = url.parse(req.url);
-    const headers = { ...req.headers };
-    // 删除可能导致问题的头
-    delete headers.host;
-    delete headers['content-length']; // 将由新 body 重新计算
-
-    const options = {
-        hostname: TARGET_HOST,
-        port: TARGET_PORT,
-        path: targetUrl.path,
-        method: req.method,
-        headers: {
-            ...headers,
-            'Content-Type': 'application/json', // 确保是 JSON
-            'Content-Length': Buffer.byteLength(bodyString),
-        },
-    };
-
-    const proxyReq = http.request(options, (proxyRes) => {
-        // 将状态码和响应头转发给客户端
-        res.writeHead(proxyRes.statusCode, proxyRes.headers);
-        // 将响应体通过管道传输
-        proxyRes.pipe(res);
-    });
-
-    proxyReq.on('error', (err) => {
-        console.error('转发请求失败:', err.message);
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('Proxy Error: ' + err.message);
-    });
-
-    // 设置超时（30秒）
-    proxyReq.setTimeout(300000, () => {
-        proxyReq.destroy();
-        res.writeHead(504, { 'Content-Type': 'text/plain' });
-        res.end('Gateway Timeout');
-    });
-
-    // 写入修改后的请求体
-    proxyReq.write(bodyString);
-    proxyReq.end();
-}
-
 // 启动服务器
-server.listen(PROXY_PORT, () => {
-    console.log(`Ollama 代理已启动，监听端口: ${PROXY_PORT}`);
-    console.log(`转发目标: http://${TARGET_HOST}:${TARGET_PORT}`);
-    console.log(`所有 POST 请求将自动添加 stream: false`);
-    console.log(`请将车万女仆模组的 API URL 改为: http://127.0.0.1:${PROXY_PORT}`);
+app.listen(PORT, '127.0.0.1', () => {
+    console.log(`代理服务器已启动，监听 http://127.0.0.1:${PORT}`);
+    console.log(`请求将被修改并转发至 ${TARGET_BASE_URL}`);
 });
