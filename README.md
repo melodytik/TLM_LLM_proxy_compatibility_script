@@ -7,7 +7,7 @@ Ultimate solution for the failure of local deployment of dialogue generation in 
 
 解决方案：我用nodejs做了一个代理脚本，作为一个中间人负责转发Ollama和车万女仆模组之间传输的数据，并修改数据包给每个给每个json里自动加上 stream=false(禁用流式传输)
 
-还有另一个版本是在加上 stream=false(禁用流式传输) 的同时 再加一个 think=false(禁用thinking模式) 以加快对话生成速度。毕竟关了流式传输玩家不能实时看到每个token的输出，禁用thinking模式能极大加快对话生成速度！
+同时我还加了 enable_thinking=false(禁用thinking模式)字段 以加快对话生成速度。毕竟关了流式传输玩家不能实时看到每个token的输出，禁用thinking模式能极大加快对话生成速度！
 
 如果这个脚本对您有帮助请帮我点点小星星，谢谢大家！！(*´∀`)~♥
 
@@ -15,6 +15,6 @@ Principle: Because the AI dialogue function of the Touhou Little Maid module is 
 
 Solution: I created a proxy script using Node.js, which acts as an intermediary responsible for forwarding the data transmitted between Ollama and the Chewan Maid module, and modifying the data packets to automatically add stream=false to each JSON file (disabling streaming transmission)
 
-There is another version that adds stream=false (disabling streaming) and think=false (disabling thinking mode) to speed up conversation generation. After all, players cannot see the real-time output of each token when streaming is turned off. Disabling the thinking mode can greatly accelerate the speed of dialogue generation!
+At the same time, I also added the enable_thinking=false field (to disable the thinking mode) to speed up the generation of dialogues. After all, if streaming is turned off, players cannot see the output of each token in real time, and disabling the thinking mode can greatly speed up the generation of dialogues!
 
 If this script is helpful to you, please help me point a little star, thank you everyone!! (*´∀`)~ ♥
