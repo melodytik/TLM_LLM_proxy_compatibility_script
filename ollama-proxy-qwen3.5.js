@@ -111,7 +111,7 @@ async function handleRequest(req, res, modifiedBody, forwardHeaders, targetUrl, 
             res.status(500).json({ error: 'Proxy server internal error', details: error.message });
         }
     } finally {
-        queueLength--;  // 无论如何都会执行
+        queueLength--;  // 始终执行
     }
 }
 
