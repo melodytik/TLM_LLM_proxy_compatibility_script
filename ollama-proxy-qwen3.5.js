@@ -21,7 +21,7 @@ app.use((req, res) => {
 
     // 强制 stream=false
     modifiedBody.stream = false;
-    modifiedBody.enable_thinking = false;  // 修复之前的语法错误
+    modifiedBody.enable_thinking = false;
 
     const targetUrl = `${TARGET_BASE_URL}${req.originalUrl}`;
 
