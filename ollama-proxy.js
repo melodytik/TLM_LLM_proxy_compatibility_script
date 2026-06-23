@@ -91,7 +91,7 @@ async function handleRequest(req, res, modifiedBody, forwardHeaders, targetUrl, 
                 responseText = JSON.stringify(parsed);
             }
         } catch (e) {
-            // 不是合法 JSON，原样透传
+            // 非合法 JSON，原样透传
             console.log(`  [#${queuePos}] 响应非 JSON，原样透传`);
         }
 
