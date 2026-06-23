@@ -13,7 +13,7 @@ Ultimate solution for the failure of local deployment of dialogue generation in 
 
 如果这个脚本对您有帮助请帮我点点小星星，谢谢大家！！(*´∀`)~♥
 
-Reason: Because the AI dialogue function of the Touhou Little Maid module is extremely simple and does not even support streaming transmission, any data packet input to the Touhou Little Maid module in streaming mode cannot be correctly parsed!
+Reason: The AI dialogue function of the Touhou Little Maid mod is extremely rudimentary, and it does not even support streaming transmission. As a result, it cannot correctly parse any data packets inputted to the Touhou Little Maid mod through streaming transmission!
 
 Solution: I created a proxy script using Node.js, which acts as an intermediary responsible for forwarding the data transmitted between Ollama and the Che Wan maid module, and modifying the data packets to automatically add "stream=false" (disable streaming) to each JSON
 
@@ -21,4 +21,4 @@ At the same time, I also added the enable_thinking=false field (to disable the t
 
 The default proxy server listens on port 11435. Please modify it yourself if necessary!
 
-If this script is helpful to you, please help me point a little star, thank you everyone!! (*´∀`)~ ♥
+If this script is helpful to you, please help me point a little STAR, thank you everyone!! (*´∀`)~ ♥
